@@ -7,6 +7,7 @@
   --muted: #666666;
   --border: #cccccc;
   --hover: #f2f2f2;
+  --danger: #c62828;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -16,6 +17,7 @@
     --muted: #888888;
     --border: #555555;
     --hover: #222222;
+    --danger: #ff6b6b;
   }
 }
 
@@ -38,20 +40,31 @@ main {
   text-align: center;
 }
 
+.timer-slot {
+  min-height: clamp(4.5rem, 18vw, 8rem);
+  margin-bottom: 2rem;
+}
+
 .timer {
+  display: block;
   font-size: clamp(4.5rem, 18vw, 8rem);
   font-weight: 200;
   letter-spacing: -0.06em;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  margin-bottom: 2rem;
+  margin: 0;
 }
 
 .timer-input {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
   width: 100%;
-  margin: 0 0 2rem;
+  height: 1em;
+  margin: 0;
   padding: 0;
   border: 0;
+  border-radius: 0;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -65,6 +78,15 @@ main {
 
 .timer-input:focus {
   outline: none;
+}
+
+.timer[hidden],
+.timer-input[hidden] {
+  display: none;
+}
+
+.timer-overtime {
+  color: var(--danger);
 }
 
 .controls {
@@ -96,10 +118,14 @@ button:hover {
     padding: 1rem;
   }
 
+  .timer-slot {
+    min-height: clamp(4rem, 22vw, 6rem);
+    margin-bottom: 1.5rem;
+  }
+
   .timer,
   .timer-input {
     font-size: clamp(4rem, 22vw, 6rem);
-    margin-bottom: 1.5rem;
   }
 
   .controls {

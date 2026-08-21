@@ -11,6 +11,7 @@ let latestDurationMs = loadLatestDuration();
 
 let state = {
   status: "idle", // idle | running | paused
+  phase: "countdown", // countdown | overtime
   durationMinutes: latestDurationMs / 60000,
   remainingMs: latestDurationMs,
   endTime: null
@@ -49,7 +50,14 @@ function saveLatestDuration(durationMs) {
 }
 
 function formatTime(ms) {
-  const totalSeconds = Math.ceil(Math.max(0, ms) / 1000);
+  return formatTimeForPhase(ms, "countdown");
+}
+
+function formatTimeForPhase(ms, phase = "countdown") {
+  const totalSeconds =
+    phase === "overtime"
+      ? Math.floor(Math.max(0, ms) / 1000)
+      : Math.ceil(Math.max(0, ms) / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
 
@@ -103,17 +111,23 @@ function loadState() {
 
     state = {
       status: saved.status,
+      phase: saved.phase ?? "countdown",
       durationMinutes: saved.durationMinutes ?? latestDurationMs / 60000,
       remainingMs: saved.remainingMs ?? latestDurationMs,
       endTime: saved.endTime
     };
 
     if (state.status === "running") {
-      state.remainingMs = state.endTime - Date.now();
+      if (state.phase === "overtime") {
+        state.remainingMs = Math.max(0, Date.now() - state.endTime);
+      } else {
+        state.remainingMs = state.endTime - Date.now();
 
-      if (state.remainingMs <= 0) {
-        finishTimer();
-        return;
+        if (state.remainingMs <= 0) {
+          state.phase = "overtime";
+          state.remainingMs = Math.max(0, Date.now() - state.endTime);
+          saveState();
+        }
       }
 
       startTicker();
@@ -123,8 +137,12 @@ function loadState() {
   }
 }
 
-function getRemainingMs() {
+function getDisplayMs() {
   if (state.status === "running") {
+    if (state.phase === "overtime") {
+      return Math.max(0, Date.now() - state.endTime);
+    }
+
     return Math.max(0, state.endTime - Date.now());
   }
 
@@ -152,16 +170,21 @@ function ensureAudioContext() {
 }
 
 function render() {
-  const remaining = getRemainingMs();
-  const displayValue = formatTime(remaining);
+  const displayMs = getDisplayMs();
+  const isOvertime =
+    state.phase === "overtime" && state.status !== "idle";
+  const displayValue = formatTimeForPhase(displayMs, state.phase);
 
   timerEl.textContent = displayValue;
   timerInputEl.value = formatTime(state.remainingMs);
   timerEl.hidden = state.status === "idle";
   timerInputEl.hidden = state.status !== "idle";
+  timerEl.classList.toggle("timer-overtime", isOvertime);
+  timerInputEl.classList.toggle("timer-overtime", isOvertime);
 
   toggleEl.textContent =
     state.status === "running" ? "Pause" : "Start";
+  toggleEl.hidden = isOvertime;
 
   resetEl.hidden = state.status === "idle";
 
@@ -175,8 +198,12 @@ function startTicker() {
   clearInterval(intervalId);
 
   intervalId = setInterval(() => {
-    if (getRemainingMs() <= 0) {
-      finishTimer();
+    if (
+      state.status === "running" &&
+      state.phase === "countdown" &&
+      getDisplayMs() <= 0
+    ) {
+      enterOvertime();
       return;
     }
 
@@ -194,11 +221,15 @@ async function startTimer() {
       parseDurationInput(timerInputEl.value) ?? latestDurationMs;
 
     saveLatestDuration(durationMs);
+    state.phase = "countdown";
     state.durationMinutes = durationMs / 60000;
     state.remainingMs = durationMs;
   }
 
-  state.endTime = Date.now() + state.remainingMs;
+  state.endTime =
+    state.phase === "overtime"
+      ? Date.now() - state.remainingMs
+      : Date.now() + state.remainingMs;
   state.status = "running";
 
   saveState();
@@ -217,7 +248,7 @@ async function startTimer() {
 }
 
 function pauseTimer() {
-  state.remainingMs = getRemainingMs();
+  state.remainingMs = getDisplayMs();
   state.endTime = null;
   state.status = "paused";
 
@@ -228,16 +259,11 @@ function pauseTimer() {
   render();
 }
 
-function finishTimer() {
-  clearInterval(intervalId);
-  intervalId = null;
+function enterOvertime() {
+  state.phase = "overtime";
+  state.remainingMs = 0;
 
-  state.status = "idle";
-  state.remainingMs = latestDurationMs;
-  state.durationMinutes = latestDurationMs / 60000;
-  state.endTime = null;
-
-  clearSavedState();
+  saveState();
   render();
   playCompletionSound();
   showNotification();
@@ -248,6 +274,7 @@ function resetTimer() {
   intervalId = null;
 
   state.status = "idle";
+  state.phase = "countdown";
   state.remainingMs = latestDurationMs;
   state.durationMinutes = latestDurationMs / 60000;
   state.endTime = null;
